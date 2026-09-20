@@ -13,21 +13,20 @@ running = False
 env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(env_path)
 
+NAME = os.getenv("BOTNAME")
 HOST = os.getenv("HOST")
 PORT = os.getenv("PORT")
 VERSION = os.getenv("MINECRAFT_VERSION")
 
-name = 'Digger'
 
-
-# --- Essentials ---
+# --- Essentials Connection things ---
 
 bot = mineflayer.createBot({
-    "username": name,
+    "username": NAME,
     "host": HOST,
     "port": PORT,
     "version": VERSION,
-    "hideErrors": False
+    "hideErrors": True
 })
 
 @On(bot, "login")
@@ -53,12 +52,32 @@ def end(reason):
     off(bot, "end", end)
 
 
+# --- Essential Events ---
+
+@On(bot, "death")
+def death():
+    print("I just died!")
+
+
 # --- Message Trigger ---
 
 @On(bot, "messagestr")
-def messagestr(this, message, messagePosition, jsonMsg, sender, verified):
-    if messagePosition == 'Chat' and (len(message) > 4+len(name) and message[0:4+len(name)] == 'bot ' + name):
-        if message == 'quit':
-            this.quit()
+def messagestr(message, messagePosition, jsonMsg, sender, verified=None):
+    if messagePosition != "chat":
+        return
+
+    prefix = f"bot {NAME}"
+
+    if len(message.split(' ')) > 3 and message.split(' ')[1] == 'bot' and message.split(' ')[2] == NAME:
+        command = message.split(prefix, 1)[1].strip()
+
+        global running
+
+        if command == "quit":
+            bot.quit()
+        elif command == "run":
+            running = True
+        elif command == "stop":
+            running = False
         else:
-            print(f'{sender} just said: {message}')
+            print(f"{message.split(' ')[0][1:-1]} just said: {command}")
