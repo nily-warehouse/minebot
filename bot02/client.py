@@ -31,21 +31,21 @@ bot = mineflayer.createBot({
 })
 
 @On(bot, "login")
-def login():
+def login(this):
     bot_socket = bot._client.socket
     print(
         f"[INFO]: Logged in to {bot_socket.server if bot_socket.server else bot_socket._host }"
     )
 
 @On(bot, "kicked")
-def kicked(reason, loggedIn):
+def kicked(this, reason, loggedIn):
     if loggedIn:
         print(f"[INFO]: Kicked from server: {reason}")
     else:
         print(f"[INFO]: Kicked whilst trying to connect: {reason}")
 
 @On(bot, "end")
-def end(reason):
+def end(this, reason):
     print(f"[INFO]: Disconnected: {reason}")
 
     off(bot, "login", login)
@@ -56,16 +56,16 @@ def end(reason):
 # --- Essential Events ---
 
 @On(bot, "death")
-def death():
-    environment.on_death()
+def death(this):
+    environment.on_death(get_state())
     print("[INFO] I just died!")
-    bot.quit()
+    this.quit()
 
 
 # --- Message Trigger ---
 
 @On(bot, "messagestr")
-def messagestr(message, messagePosition, jsonMsg, sender, verified=None):
+def messagestr(this, message, messagePosition, jsonMsg, sender, verified=None):
     if messagePosition != "chat":
         return
 
@@ -77,7 +77,7 @@ def messagestr(message, messagePosition, jsonMsg, sender, verified=None):
         global running
 
         if command == "quit":
-            bot.quit()
+            this.quit()
         elif command == "run":
             running = True
         elif command == "stop":
@@ -92,13 +92,13 @@ environment = MinecraftEnv()
 
 def execute():
     if running:
-        action = environment.on_tick()
+        action = environment.on_tick(get_state())
         perform_action(action)
 
 tick_counter = 0
 
 @On(bot, "physicsTick")
-def on_tick():
+def on_tick(this):
     global tick_counter
 
     tick_counter += 1
@@ -108,6 +108,8 @@ def on_tick():
         execute()
 
 def perform_action(action):
+    bot.clearControlStates()
+    
     # move
     if "controls" in action:
         for control in action["controls"]:
@@ -122,4 +124,8 @@ def perform_action(action):
 
     # attack
     if "attack" in action:
-        bot.attack()
+        pass
+        # bot.attack()
+
+def get_state():
+    return None
