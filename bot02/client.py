@@ -14,12 +14,10 @@ running = False
 env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(env_path)
 
-NAME    = os.getenv("BOTNAME")
-
-RANGE   = os.getenv("RANGE")
-
-HOST    = os.getenv("HOST")
-PORT    = os.getenv("PORT")
+NAME = os.getenv("BOTNAME")
+RANGE = int(os.getenv("RANGE"))
+HOST = os.getenv("HOST")
+PORT = os.getenv("PORT")
 VERSION = os.getenv("MINECRAFT_VERSION")
 
 
@@ -60,9 +58,15 @@ def end(this, reason):
 
 @On(bot, "death")
 def death(this):
+    print(f"[INFO]: Episode {environment.episode} just finished!")
+
     environment.on_death(get_state())
-    print("[INFO] I just died!")
-    this.quit()
+
+    if environment.limit_reached:
+        global running
+        running = False
+        print('Episode Limit reached')
+        this.quit()
 
 
 # --- Message Trigger ---

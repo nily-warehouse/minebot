@@ -37,6 +37,8 @@ class MinecraftEnv:
     }
     ACTIONS = list(COMMANDS)
 
+    EP_LIMIT = 50
+
     def __init__(self, policy=None, reward_function=None, grid_radius=1, tick_every=2):
 
         self.policy = policy or (lambda state: random.randrange(self.n_actions))
@@ -49,10 +51,15 @@ class MinecraftEnv:
 
         self.transitions = []
         self._pending = None
+        self.episode = self.EP_LIMIT
 
     @property
     def n_actions(self):
         return len(self.ACTIONS)
+
+    @property
+    def limit_reached(self):
+        return self.episode > 5
 
 
     # --- steps ---
@@ -64,9 +71,10 @@ class MinecraftEnv:
         return self.COMMANDS[self.ACTIONS[action]]
 
     def on_death(self, last_state=None):
+        self.episode += 1
         if self._pending is None:
             return
-        final_state = self._pending.state or last_state
+        final_state = last_state or self._pending.state
         self._finish_pending_step(final_state, done=True)
 
     def _finish_pending_step(self, next_state, done):
