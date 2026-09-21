@@ -1,0 +1,7 @@
+{
+  "name": "bot-03",
+  "dependencies": {
+    "mineflayer": "latest",
+    "dotenv": "latest"
+  }
+}
