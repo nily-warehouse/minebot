@@ -89,6 +89,7 @@ def messagestr(this, message, messagePosition, jsonMsg, sender, verified=None):
             running = True
         elif command == "stop":
             running = False
+            bot.clearControlStates()
         else:
             print(f"{message.split(' ')[0][1:-1]} just said: {command}")
 
@@ -114,6 +115,7 @@ def on_tick(this):
         tick_counter = 0
         execute()
 
+
 def perform_action(action):
     bot.clearControlStates()
     
@@ -137,5 +139,36 @@ def perform_action(action):
         else:
             bot.swingArm('right')   
 
+
+UNKNOWN_BLOCK = "unknown"
+
 def get_state():
-    return None
+    entity = bot.entity
+    return {
+        "position": vector_to_tuple(entity.position),
+        "velocity": vector_to_tuple(entity.velocity),
+        "yaw": entity.yaw,
+        "pitch": entity.pitch,
+        "on_ground": entity.onGround,
+        "health": bot.health,
+        "food": bot.food,
+        "blocks": get_block_grid(environment.grid_radius),
+    }
+
+def vector_to_tuple(vector):
+    return (vector.x, vector.y, vector.z)
+
+def get_block_grid(radius):
+    center = bot.entity.position.floored()
+    offsets = range(-radius, radius + 1)
+    return [
+        [
+            [get_block_name(center.offset(dx, dy, dz)) for dz in offsets]
+            for dy in offsets
+        ]
+        for dx in offsets
+    ]
+
+def get_block_name(position):
+    block = bot.blockAt(position)
+    return block.name if block else UNKNOWN_BLOCK

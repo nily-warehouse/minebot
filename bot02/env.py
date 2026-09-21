@@ -51,7 +51,7 @@ class MinecraftEnv:
 
         self.transitions = []
         self._pending = None
-        self.episode = self.EP_LIMIT
+        self.episode = 1
 
     @property
     def n_actions(self):
@@ -59,7 +59,7 @@ class MinecraftEnv:
 
     @property
     def limit_reached(self):
-        return self.episode > 5
+        return self.episode > self.EP_LIMIT
 
 
     # --- steps ---
