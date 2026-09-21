@@ -2,6 +2,7 @@ const path = require("path");
 const dotenv = require("dotenv");
 const mineflayer = require("mineflayer");
 const { MinecraftEnv } = require("./env");
+const { TransitionWriter } = require("./recorder");
 
 
 // --- Configs ---
@@ -59,6 +60,7 @@ bot.on("end", end);
 // --- Main Area ---
 
 const environment = new MinecraftEnv(null, null, RANGE);
+const writer = new TransitionWriter();
 
 function execute() {
     if (running) {
@@ -73,6 +75,7 @@ bot.on("death", () => {
     console.log(`[INFO]: Episode ${environment.episode} just finished!`);
 
     environment.on_death(get_state());
+    writer.append(environment.pop_transitions());
 
     if (environment.limit_reached) {
         running = false;

@@ -49,7 +49,7 @@ class MinecraftEnv {
     static EP_LIMIT = 50;
 
     constructor(policy = null, reward_function = null, grid_radius = 1, tick_every = 2) {
-        this.policy = policy || (state => 1);// Math.floor(Math.random() * this.n_actions));
+        this.policy = policy || (state => Math.floor(Math.random() * this.n_actions));
         this.reward_function = reward_function || ((prev_state, state, done) => 0);
 
         this.grid_radius = grid_radius;
@@ -86,9 +86,6 @@ class MinecraftEnv {
     // --- steps ---
 
     on_tick(state) {
-
-        console.log(state.blocks[0])
-
         this._finish_pending_step(state, false);
         const action = this.policy(state);
         this._pending = new Decision(state, action);
@@ -102,6 +99,12 @@ class MinecraftEnv {
         }
         const final_state = last_state || this._pending.state;
         this._finish_pending_step(final_state, true);
+    }
+
+    pop_transitions() {
+        const finished = this.transitions;
+        this.transitions = [];
+        return finished;
     }
 
     _finish_pending_step(next_state, done) {
