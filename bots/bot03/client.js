@@ -96,6 +96,8 @@ bot.on("messagestr", (message, messagePosition) => {
         const command = message.split(prefix, 2)[1].trim();
 
         if (command === "quit") {
+            environment.on_death(get_state());
+            writer.append(environment.pop_transitions());
             bot.quit();
         } else if (command === "run") {
             running = true;
@@ -149,18 +151,18 @@ function perform_action(action) {
 }
 
 
-const UNKNOWN_BLOCK = "unknown";
+// --- Game State Interpretation ---
 
 function get_state() {
     const entity = bot.entity;
     return {
-        position: vector_to_tuple(entity.position),
+        // position: vector_to_tuple(entity.position),
         velocity: vector_to_tuple(entity.velocity),
         yaw: entity.yaw,
         pitch: entity.pitch,
         on_ground: entity.onGround,
         health: bot.health,
-        food: bot.food,
+        // food: bot.food,
         blocks: get_block_grid(environment.grid_radius),
     };
 }
@@ -181,7 +183,15 @@ function get_block_grid(radius) {
 
 function get_block_name(position) {
     const block = bot.blockAt(position);
-    return block ? block.name : UNKNOWN_BLOCK;
+
+    if (block == null) {
+        return -1;
+    }
+    else if (block.name == 'air') {
+        return  0;
+    } else {
+        return  1;
+    }
 }
 
 module.exports = { bot, environment, get_state, perform_action };
