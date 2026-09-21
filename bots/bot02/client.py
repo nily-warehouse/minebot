@@ -2,7 +2,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 from javascript import require, On, Once, AsyncTask, once, off
-from env import MinecraftEnv
+from bots.bot02.env import MinecraftEnv
 
 mineflayer = require("mineflayer")
 

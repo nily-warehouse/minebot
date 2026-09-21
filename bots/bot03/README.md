@@ -1,0 +1,1 @@
+This is a harness for Minecraft that connects to a Minecraft server, tests policies, and records "state-action" logs in a transitions pool.
