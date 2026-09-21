@@ -14,9 +14,12 @@ running = False
 env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(env_path)
 
-NAME = os.getenv("BOTNAME")
-HOST = os.getenv("HOST")
-PORT = os.getenv("PORT")
+NAME    = os.getenv("BOTNAME")
+
+RANGE   = os.getenv("RANGE")
+
+HOST    = os.getenv("HOST")
+PORT    = os.getenv("PORT")
 VERSION = os.getenv("MINECRAFT_VERSION")
 
 
@@ -88,7 +91,7 @@ def messagestr(this, message, messagePosition, jsonMsg, sender, verified=None):
 
 # --- Main Area ---
 
-environment = MinecraftEnv()
+environment = MinecraftEnv(grid_radius=RANGE)
 
 def execute():
     if running:
@@ -124,8 +127,11 @@ def perform_action(action):
 
     # attack
     if "attack" in action:
-        pass
-        # bot.attack()
+        target = bot.entityAtCursor(RANGE)
+        if target:
+            bot.attack(target)
+        else:
+            bot.swingArm('right')   
 
 def get_state():
     return None

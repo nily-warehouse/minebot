@@ -34,8 +34,6 @@ class MinecraftEnv:
             {"dpitch": -TURN_STEP},
         "attack":
             {"attack": True},
-        # "dig":
-        #     {"dig": True},
     }
     ACTIONS = list(COMMANDS)
 
