@@ -1,13 +1,13 @@
 const path = require("path");
 const dotenv = require("dotenv");
 const mineflayer = require("mineflayer");
-const { MinecraftEnv } = require("./env");
+const { MinecraftEnv, Transition, Decision } = require("./env");
 const { TransitionWriter } = require("./recorder");
 
 
 // --- Configs ---
 
-let running = false;
+// - env configs -
 
 const env_path = path.resolve(__dirname, "..", ".env");
 dotenv.config({ path: env_path });
@@ -17,6 +17,53 @@ const RANGE = Number.parseInt(process.env.RANGE, 10);
 const HOST = process.env.HOST;
 const PORT = 25565
 const VERSION = process.env.MINECRAFT_VERSION;
+
+// - initial setup -
+
+const args = process.argv.slice(2);
+
+let tick_counter = 0;
+let running = false;
+let slot = 0;
+let policy = null;
+
+for (const arg of args) {
+  if (arg === "instant-run") {
+    running = true;
+    console.log('[INFO]: instant-run activated')
+    continue;
+  }
+
+  const separatorIndex = arg.indexOf(":");
+
+  if (separatorIndex === -1) {
+    continue;
+  }
+
+  const key = arg.slice(0, separatorIndex);
+  const value = arg.slice(separatorIndex + 1);
+
+  if (key === "slot") {
+    const parsedSlot = Number(value);
+
+    if (!/^\d+$/.test(value) || !Number.isSafeInteger(parsedSlot)) {
+      console.error("Enter a positive natural number!");
+      process.exit(1);
+    }
+
+    slot = parsedSlot;
+  } else if (key === "policy") {
+    if (value.trim() === "") {
+      console.error("Enter a positive natural number!");
+      process.exit(1);
+    }
+
+    policy = value;
+  }
+}
+
+const environment = new MinecraftEnv(policy, null, RANGE);
+const writer = new TransitionWriter();
 
 
 // --- Essentials Connection things ---
@@ -52,30 +99,25 @@ function end(reason) {
     bot.removeListener("end", end);
 }
 
-bot.on("login", login);
-bot.on("kicked", kicked);
-bot.on("end", end);
-
-
-// --- Main Area ---
-
-const environment = new MinecraftEnv(null, null, RANGE);
-const writer = new TransitionWriter();
-
-function execute() {
-    if (running) {
-        const action = environment.on_tick(get_state());
-        perform_action(action);
+function spawn() {
+    if (slot > 0) {
+        bot.chat('/mv tp slot_' + slot);
     }
 }
 
-let tick_counter = 0;
+bot.on("login", login);
+bot.on("kicked", kicked);
+bot.on("end", end);
+bot.once('spawn', spawn);
+
+
+// --- Running and Death Managment ---
 
 bot.on("death", () => {
     console.log(`[INFO]: Episode ${environment.episode} just finished!`);
 
     environment.on_death(get_state());
-    writer.append(environment.pop_transitions());
+    write_transition(environment.pop_transitions());
 
     if (environment.limit_reached) {
         running = false;
@@ -97,7 +139,7 @@ bot.on("messagestr", (message, messagePosition) => {
 
         if (command === "quit") {
             environment.on_death(get_state());
-            writer.append(environment.pop_transitions());
+            write_transition(environment.pop_transitions());
             bot.quit();
         } else if (command === "run") {
             running = true;
@@ -112,6 +154,16 @@ bot.on("messagestr", (message, messagePosition) => {
     }
 });
 
+
+// --- Every tick trigger ---
+
+function execute() {
+    if (running) {
+        const action = environment.on_tick(get_state());
+        perform_action(action);
+    }
+}
+
 bot.on("physicsTick", () => {
     tick_counter += 1;
 
@@ -121,25 +173,38 @@ bot.on("physicsTick", () => {
     }
 });
 
+
+// --- Action ---
+
+const MAX_PITCH = Math.PI / 2 - 0.01;
+
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function normalize_yaw(yaw) {
+    return ((yaw + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+}
+
 function perform_action(action) {
     bot.clearControlStates();
 
-    // move
     if ("controls" in action) {
         for (const control of action.controls) {
             bot.setControlState(control, true);
         }
     }
 
-    // look around
     if ("dyaw" in action || "dpitch" in action) {
-        bot.look(
-            bot.entity.yaw + (action.dyaw || 0),
+        const new_yaw = normalize_yaw(bot.entity.yaw + (action.dyaw || 0));
+        const new_pitch = clamp(
             bot.entity.pitch + (action.dpitch || 0),
+            -MAX_PITCH,
+            MAX_PITCH
         );
+        bot.look(new_yaw, new_pitch);
     }
 
-    // attack
     if ("attack" in action) {
         const target = bot.entityAtCursor(RANGE);
         if (target) {
@@ -155,14 +220,20 @@ function perform_action(action) {
 
 function get_state() {
     const entity = bot.entity;
+    const target = get_nearest_zombie();
+
     return {
-        // position: vector_to_tuple(entity.position),
+        // bot state
         velocity: vector_to_tuple(entity.velocity),
         yaw: entity.yaw,
         pitch: entity.pitch,
         on_ground: entity.onGround,
         health: bot.health,
-        // food: bot.food,
+
+        // target
+        target: target ? matrixAdition(target.position, bot.entity.position) : null,
+
+        // terrain
         blocks: get_block_grid(environment.grid_radius),
     };
 }
@@ -193,5 +264,24 @@ function get_block_name(position) {
         return  1;
     }
 }
+
+function get_nearest_zombie() {
+    return bot.nearestEntity(entity => entity.name === 'zombie');
+}
+
+
+// --- Write transition ---
+
+function write_transition(transitions) {
+    writer.append(transitions);
+}
+
+
+// --- Utils ---
+
+function matrixAdition(a, b) {
+    return [a.x - b.x, a.y - b.y, a.z - b.z]
+}
+
 
 module.exports = { bot, environment, get_state, perform_action };

@@ -15,8 +15,17 @@ class TransitionWriter {
         if (transitions.length === 0) {
             return;
         }
-        const lines = transitions.map(t => JSON.stringify(t)).join("\n");
-        fs.appendFileSync(this.file_path, lines + "\n");
+
+        let lines = ''
+
+        for (let t=0; t<transitions.length; t++) {
+            const transition = JSON.parse(JSON.stringify(transitions[t]))
+            if (transition.state.target != null) {
+                lines += JSON.stringify(transition) + '\n'
+            }
+        }
+
+        fs.appendFileSync(this.file_path, lines);
     }
 }
 
