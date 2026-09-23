@@ -12,7 +12,7 @@ const { TransitionWriter } = require("./recorder");
 const env_path = path.resolve(__dirname, "..", ".env");
 dotenv.config({ path: env_path });
 
-const NAME = process.env.BOTNAME;
+let   NAME = process.env.BOTNAME;
 const RANGE = Number.parseInt(process.env.RANGE, 10);
 const HOST = process.env.HOST;
 const PORT = 25565
@@ -52,6 +52,7 @@ for (const arg of args) {
     }
 
     slot = parsedSlot;
+    NAME += slot
   } else if (key === "policy") {
     if (value.trim() === "") {
       console.error("Enter a positive natural number!");
@@ -99,17 +100,21 @@ function end(reason) {
     bot.removeListener("end", end);
 }
 
-function spawn() {
+function setSlot() {
     if (slot > 0) {
         bot.chat('/mv tp slot_' + slot);
     }
 }
 
+function setLoc() {
+    bot.chat(`/tp ${NAME} 8.5 -60 8.5`)
+}
+
 bot.on("login", login);
+bot.on('spawn', setLoc);
+bot.once('spawn', setSlot);
 bot.on("kicked", kicked);
 bot.on("end", end);
-bot.once('spawn', spawn);
-
 
 // --- Running and Death Managment ---
 
