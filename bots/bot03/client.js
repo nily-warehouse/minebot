@@ -26,6 +26,7 @@ let tick_counter = 0;
 let running = false;
 let slot = 0;
 let policy = null;
+let epLimit = -1;
 
 for (const arg of args) {
   if (arg === "instant-run") {
@@ -53,7 +54,9 @@ for (const arg of args) {
 
     slot = parsedSlot;
     NAME += slot
-  } else if (key === "policy") {
+  }
+  
+  else if (key === "policy") {
     if (value.trim() === "") {
       console.error("Enter a positive natural number!");
       process.exit(1);
@@ -61,9 +64,20 @@ for (const arg of args) {
 
     policy = value;
   }
+
+  else if (key === "ep") {
+    const parsedEP = Number(value)
+    
+    if (!/^\d+$/.test(value) || !Number.isSafeInteger(parsedEP)) {
+      console.error("Enter a positive natural number!");
+      process.exit(1);
+    }
+
+    epLimit = value;
+  }
 }
 
-const environment = new MinecraftEnv(policy, null, RANGE);
+const environment = new MinecraftEnv(policy, epLimit);
 const writer = new TransitionWriter();
 
 
@@ -106,12 +120,18 @@ function setSlot() {
     }
 }
 
-function setLoc() {
+function spawn() {
+    if (environment.limit_reached) {
+        running = false;
+        console.log("Episode Limit reached");
+        bot.quit();
+        return
+    }
     bot.chat(`/tp ${NAME} 8.5 -60 8.5`)
 }
 
 bot.on("login", login);
-bot.on('spawn', setLoc);
+bot.on('spawn', spawn);
 bot.once('spawn', setSlot);
 bot.on("kicked", kicked);
 bot.on("end", end);
@@ -123,12 +143,6 @@ bot.on("death", () => {
 
     environment.on_death(get_state());
     write_transition(environment.pop_transitions());
-
-    if (environment.limit_reached) {
-        running = false;
-        console.log("Episode Limit reached");
-        bot.quit();
-    }
 });
 
 bot.on("messagestr", (message, messagePosition) => {
@@ -237,38 +251,12 @@ function get_state() {
 
         // target
         target: target ? matrixAdition(target.position, bot.entity.position) : null,
-
-        // terrain
-        // blocks: get_block_grid(environment.grid_radius),
     };
 }
 
 function vector_to_tuple(vector) {
     return [vector.x, vector.y, vector.z];
 }
-
-// function get_block_grid(radius) {
-//     const center = bot.entity.position.floored();
-//     const offsets = Array.from({ length: 2 * radius + 1 }, (_, index) => index - radius);
-//     return offsets.map(dx =>
-//         offsets.map(dy =>
-//             offsets.map(dz => get_block_name(center.offset(dx, dy, dz)))
-//         )
-//     );
-// }
-
-// function get_block_name(position) {
-//     const block = bot.blockAt(position);
-
-//     if (block == null) {
-//         return -1;
-//     }
-//     else if (block.name == 'air') {
-//         return  0;
-//     } else {
-//         return  1;
-//     }
-// }
 
 function get_nearest_zombie() {
     return bot.nearestEntity(entity => entity.name === 'zombie');

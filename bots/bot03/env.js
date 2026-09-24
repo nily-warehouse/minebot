@@ -13,7 +13,6 @@ class Transition {
     constructor(state, action, reward, nextState, done) {
         this.state = state;
         this.action = action;
-        this.reward = reward;
         this.next_state = nextState;
         this.done = done;
     }
@@ -48,14 +47,10 @@ class MinecraftEnv {
             { "attack": true },
     };
     static ACTIONS = Object.keys(MinecraftEnv.COMMANDS);
-    static EP_LIMIT = 50;
 
-    constructor(policy = null, reward_function = null, grid_radius = 1, tick_every = 2) {
+    constructor(policy = null, epLimit = -1, tick_every = 2) {
         this.policy = policy ? loadModel('./pool/models/' + policy) : null;
-        this.reward_function = reward_function || ((prev_state, state, done) => 0);
-
-        this.grid_radius = grid_radius;
-
+        this.epLimit = epLimit != -1 ? epLimit : 1
         this.tick_every = tick_every;
         // decide once every X game ticks
 
@@ -72,16 +67,12 @@ class MinecraftEnv {
         return MinecraftEnv.ACTIONS;
     }
 
-    get EP_LIMIT() {
-        return MinecraftEnv.EP_LIMIT;
-    }
-
     get n_actions() {
         return this.ACTIONS.length;
     }
 
     get limit_reached() {
-        return this.episode > this.EP_LIMIT;
+        return this.episode > this.epLimit;
     }
 
 
@@ -119,8 +110,7 @@ class MinecraftEnv {
             return;
         }
         const { state, action } = this._pending;
-        const reward = this.reward_function(state, next_state, done);
-        this.transitions.push(new Transition(state, action, reward, next_state, done));
+        this.transitions.push(new Transition(state, action, next_state, done));
         this._pending = null;
     }
 }
