@@ -1,3 +1,5 @@
+const { loadModel, decide } = require('./policy')
+
 const TURN_STEP = Math.PI / 12;
 
 class Decision {
@@ -49,7 +51,7 @@ class MinecraftEnv {
     static EP_LIMIT = 50;
 
     constructor(policy = null, reward_function = null, grid_radius = 1, tick_every = 2) {
-        this.policy = policy ? this._load_policy(policy) : (state => Math.floor(Math.random() * this.n_actions));
+        this.policy = policy ? loadModel('./pool/models/' + policy) : null;
         this.reward_function = reward_function || ((prev_state, state, done) => 0);
 
         this.grid_radius = grid_radius;
@@ -88,9 +90,9 @@ class MinecraftEnv {
     on_tick(state) {
         this._finish_pending_step(state, false);
         
-        let action = this.policy(state);
-        if (state.target == null) {
-            action = 0;
+        let action = 0
+        if (state.target != null && this.policy != null) {
+            action = decide(this.policy, state);
         }
         
         this._pending = new Decision(state, action);
@@ -120,12 +122,6 @@ class MinecraftEnv {
         const reward = this.reward_function(state, next_state, done);
         this.transitions.push(new Transition(state, action, reward, next_state, done));
         this._pending = null;
-    }
-
-    _load_policy(addr) {
-        return (state) => {
-            return 1;
-        };
     }
 }
 

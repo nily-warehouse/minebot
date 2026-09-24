@@ -239,7 +239,7 @@ function get_state() {
         target: target ? matrixAdition(target.position, bot.entity.position) : null,
 
         // terrain
-        blocks: get_block_grid(environment.grid_radius),
+        // blocks: get_block_grid(environment.grid_radius),
     };
 }
 
@@ -247,28 +247,28 @@ function vector_to_tuple(vector) {
     return [vector.x, vector.y, vector.z];
 }
 
-function get_block_grid(radius) {
-    const center = bot.entity.position.floored();
-    const offsets = Array.from({ length: 2 * radius + 1 }, (_, index) => index - radius);
-    return offsets.map(dx =>
-        offsets.map(dy =>
-            offsets.map(dz => get_block_name(center.offset(dx, dy, dz)))
-        )
-    );
-}
+// function get_block_grid(radius) {
+//     const center = bot.entity.position.floored();
+//     const offsets = Array.from({ length: 2 * radius + 1 }, (_, index) => index - radius);
+//     return offsets.map(dx =>
+//         offsets.map(dy =>
+//             offsets.map(dz => get_block_name(center.offset(dx, dy, dz)))
+//         )
+//     );
+// }
 
-function get_block_name(position) {
-    const block = bot.blockAt(position);
+// function get_block_name(position) {
+//     const block = bot.blockAt(position);
 
-    if (block == null) {
-        return -1;
-    }
-    else if (block.name == 'air') {
-        return  0;
-    } else {
-        return  1;
-    }
-}
+//     if (block == null) {
+//         return -1;
+//     }
+//     else if (block.name == 'air') {
+//         return  0;
+//     } else {
+//         return  1;
+//     }
+// }
 
 function get_nearest_zombie() {
     return bot.nearestEntity(entity => entity.name === 'zombie');
