@@ -1,14 +1,16 @@
 const fs = require("fs");
 const path = require("path");
 
-const TRANSITIONS_FILE = path.resolve(
-    __dirname, "..", "..", "pool", "transitions", "transitions.jsonl"
-);
-
 class TransitionWriter {
-    constructor(file_path = TRANSITIONS_FILE) {
-        this.file_path = file_path;
-        fs.mkdirSync(path.dirname(file_path), { recursive: true });
+    constructor(slot = 0) {
+        if (slot == 0) slot = ""
+        else slot = "_slot_" + String(slot)
+
+        this.file_path = path.resolve(
+            __dirname, "..", "..", "pool", "transitions", "transitions" + slot + ".jsonl"
+        );
+        
+        fs.mkdirSync(path.dirname(this.file_path), { recursive: true });
     }
 
     append(transitions) {

@@ -78,7 +78,7 @@ for (const arg of args) {
 }
 
 const environment = new MinecraftEnv(policy, epLimit);
-const writer = new TransitionWriter();
+const writer = new TransitionWriter(slot);
 
 
 // --- Essentials Connection things ---
