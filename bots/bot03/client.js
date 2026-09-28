@@ -17,6 +17,13 @@ const RANGE = Number.parseInt(process.env.RANGE, 10);
 const HOST = process.env.HOST;
 const PORT = 25565
 const VERSION = process.env.MINECRAFT_VERSION;
+const EPISODE_TIMEOUT_SECONDS = Number(process.env.EPISODE_TIMEOUT_SECONDS);
+
+if (!Number.isFinite(EPISODE_TIMEOUT_SECONDS) || EPISODE_TIMEOUT_SECONDS <= 0) {
+    throw new Error("EPISODE_TIMEOUT_SECONDS must be a positive number");
+}
+
+const EPISODE_TIMEOUT_MS = EPISODE_TIMEOUT_SECONDS * 1000;
 
 // - initial setup -
 
@@ -27,6 +34,7 @@ let running = false;
 let slot = 0;
 let policy = null;
 let epLimit = -1;
+let episode_timer = null;
 
 for (const arg of args) {
   if (arg === "instant-run") {
@@ -107,6 +115,7 @@ function kicked(reason, loggedIn) {
 }
 
 function end(reason) {
+    clear_episode_timer();
     console.log(`[INFO]: Disconnected: ${reason}`);
 
     bot.removeListener("login", login);
@@ -121,13 +130,36 @@ function setSlot() {
 }
 
 function spawn() {
+    clear_episode_timer();
+
     if (environment.limit_reached) {
         running = false;
         console.log("Episode Limit reached");
         bot.quit();
         return
     }
+
     bot.chat(`/tp ${NAME} 8.5 -60 8.5`)
+    start_episode_timer();
+}
+
+function clear_episode_timer() {
+    if (episode_timer !== null) {
+        clearTimeout(episode_timer);
+        episode_timer = null;
+    }
+}
+
+function start_episode_timer() {
+    clear_episode_timer();
+    episode_timer = setTimeout(() => {
+        episode_timer = null;
+        console.log(
+            `[INFO]: Episode ${environment.episode} reached the ` +
+            `${EPISODE_TIMEOUT_SECONDS}s timeout`
+        );
+        bot.chat(`/kill ${NAME}`);
+    }, EPISODE_TIMEOUT_MS);
 }
 
 bot.on("login", login);
@@ -139,6 +171,7 @@ bot.on("end", end);
 // --- Running and Death Managment ---
 
 bot.on("death", () => {
+    clear_episode_timer();
     console.log(`[INFO]: Episode ${environment.episode} just finished!`);
 
     environment.on_death(get_state());
