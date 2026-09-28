@@ -22,9 +22,7 @@ class TransitionWriter {
 
         for (let t=0; t<transitions.length; t++) {
             const transition = JSON.parse(JSON.stringify(transitions[t]))
-            if (transition.state.target != null) {
-                lines += JSON.stringify(transition) + '\n'
-            }
+            lines += JSON.stringify(transition) + '\n'
         }
 
         fs.appendFileSync(this.file_path, lines);
