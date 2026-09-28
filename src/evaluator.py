@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass
+from typing import Callable
 
 from .config import SERVER_SLOTS, HarnessConfig
 from .fitness import FitnessReport, evaluate_fitness
@@ -22,6 +24,10 @@ class EvaluationResult:
     report: FitnessReport
     return_code: int | None
     output_tail: str
+    elapsed_seconds: float = 0.0
+
+
+EvaluationCallback = Callable[[EvaluationResult, int, int], None]
 
 
 class HarnessEvaluator:
@@ -33,6 +39,7 @@ class HarnessEvaluator:
         self.harness = harness
 
     async def evaluate_one(self, job: EvaluationJob, slot: int) -> EvaluationResult:
+        started_at = time.monotonic()
         transition_path = self.harness.transition_path(slot)
         clear_transition_file(transition_path)
         try:
@@ -72,24 +79,35 @@ class HarnessEvaluator:
             report=report,
             return_code=process.returncode,
             output_tail=text[-3000:],
+            elapsed_seconds=time.monotonic() - started_at,
         )
 
-    async def evaluate(self, model_names: list[str]) -> list[EvaluationResult]:
+    async def evaluate(
+        self,
+        model_names: list[str],
+        on_result: EvaluationCallback | None = None,
+    ) -> list[EvaluationResult]:
         if not self.harness.client_path.is_file():
             raise FileNotFoundError(f"bot03 client not found: {self.harness.client_path}")
         queue: asyncio.Queue[EvaluationJob] = asyncio.Queue()
         for index, model_name in enumerate(model_names):
             queue.put_nowait(EvaluationJob(index=index, model_name=model_name))
         results: list[EvaluationResult | None] = [None] * len(model_names)
+        completed = 0
 
         async def worker(slot: int) -> None:
+            nonlocal completed
             while True:
                 try:
                     job = queue.get_nowait()
                 except asyncio.QueueEmpty:
                     return
                 try:
-                    results[job.index] = await self.evaluate_one(job, slot)
+                    result = await self.evaluate_one(job, slot)
+                    results[job.index] = result
+                    completed += 1
+                    if on_result is not None:
+                        on_result(result, completed, len(model_names))
                 finally:
                     queue.task_done()
 

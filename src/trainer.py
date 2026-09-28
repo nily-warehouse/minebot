@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import io
 import json
 import math
 import os
@@ -11,7 +13,7 @@ from typing import Callable
 import neat
 
 from .config import NEAT_CONFIG, HarnessConfig
-from .evaluator import EvaluationResult, HarnessEvaluator
+from .evaluator import EvaluationCallback, EvaluationResult, HarnessEvaluator
 from .neat_model import genome_to_model, load_config
 
 
@@ -46,6 +48,7 @@ class Trainer:
         self.history_path = harness.project_root / "pool" / "training_history.jsonl"
         self._stats: GenerationStats | None = None
         self._results: list[EvaluationResult] = []
+        self._on_evaluation: EvaluationCallback | None = None
 
     @classmethod
     def create(cls, harness: HarnessConfig, population_size: int) -> "Trainer":
@@ -85,12 +88,15 @@ class Trainer:
             generation_interval=1,
             filename_prefix=str(directory / "checkpoint-"),
         )
-        checkpointer.save_checkpoint(
-            self.population.config,
-            self.population.population,
-            self.population.species,
-            generation,
-        )
+        # neat-python prints directly to stdout here. The CLI owns presentation,
+        # so keep the library call quiet and report the saved generation there.
+        with contextlib.redirect_stdout(io.StringIO()):
+            checkpointer.save_checkpoint(
+                self.population.config,
+                self.population.population,
+                self.population.species,
+                generation,
+            )
 
     @staticmethod
     def _clear_brains(directory: Path) -> None:
@@ -161,7 +167,9 @@ class Trainer:
         generation = self.population.generation
         ordered = sorted(genomes)
         names = self.export_population(ordered)
-        results = asyncio.run(self.evaluator.evaluate(names))
+        results = asyncio.run(
+            self.evaluator.evaluate(names, on_result=self._on_evaluation)
+        )
         if all(
             result.return_code != 0 or result.report.transitions == 0
             for result in results
@@ -202,6 +210,8 @@ class Trainer:
         generations: int,
         on_generation: Callable[[GenerationStats, list[EvaluationResult]], None]
         | None = None,
+        on_generation_start: Callable[[int, int], None] | None = None,
+        on_evaluation: EvaluationCallback | None = None,
     ) -> list[GenerationStats]:
         if generations < 1:
             raise ValueError("generations must be at least one")
@@ -215,7 +225,16 @@ class Trainer:
                 )
             self._stats = None
             self._results = []
-            self.population.run(self._evaluate_generation, 1)
+            self._on_evaluation = on_evaluation
+            if on_generation_start is not None:
+                on_generation_start(
+                    self.population.generation,
+                    len(self.population.population),
+                )
+            try:
+                self.population.run(self._evaluate_generation, 1)
+            finally:
+                self._on_evaluation = None
             if self._stats is None:
                 raise RuntimeError("generation finished without evaluation statistics")
             self._save_checkpoint()

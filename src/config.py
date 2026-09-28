@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SERVER_SLOTS = 5
+SERVER_SLOTS = 10
 NEAT_CONFIG = Path(__file__).resolve().with_name("neat_config.ini")
 
 
