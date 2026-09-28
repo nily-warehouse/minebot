@@ -10,7 +10,7 @@ class Decision {
 }
 
 class Transition {
-    constructor(state, action, reward, nextState, done) {
+    constructor(state, action, nextState, done) {
         this.state = state;
         this.action = action;
         this.next_state = nextState;

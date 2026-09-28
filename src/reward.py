@@ -54,6 +54,11 @@ def _health(state: Any) -> float | None:
     return value if math.isfinite(value) else None
 
 
+def _observed_no_target(state: Any) -> bool:
+    """True only for a valid observation that explicitly has no target."""
+    return isinstance(state, dict) and "target" in state and state["target"] is None
+
+
 def _is_aimed_at_target(state: Any, rules: RewardConfig) -> bool:
     """True if the bot looks at the zombie and is within attack range."""
     if not isinstance(state, dict):
@@ -103,7 +108,7 @@ def reward_transition(transition: dict[str, Any], config: RewardConfig | None = 
 
     old_distance = _distance(state)
     new_distance = _distance(next_state)
-    inferred_kill = old_distance is not None and new_distance is None and not done
+    inferred_kill = old_distance is not None and _observed_no_target(next_state) and not done
 
     value = 0.0
     if old_distance is not None and new_distance is not None:
