@@ -82,12 +82,12 @@ def reward_transition(transition: dict[str, Any], config: RewardConfig | None = 
     new_th = _target_health(next_state)
 
     killed = (
-        old_offset is not None
-        and not done
-        and (
-            _has_no_target(next_state)
-            or (same_target and new_th is not None and new_th <= 0)
-        )
+        old_offset is not None and not done and isinstance(next_state, dict) and (
+            next_state.get("target_killed") is True
+            or (same_target and old_th is not None and old_th > 0
+                and new_th is not None and new_th <= 0)
+            or (old_th is None and _has_no_target(next_state))  # فقط دیتای قدیمی
+       )
     )
 
     value = 0.0

@@ -132,6 +132,8 @@ function setSlot() {
 }
 
 function spawn() {
+    killed_ids.clear()
+
     pending_attack = null;
     clear_episode_timer();
 
@@ -166,8 +168,8 @@ function start_episode_timer() {
 }
 
 bot.on("login", login);
-bot.on('spawn', spawn);
 bot.once('spawn', setSlot);
+bot.on('spawn', spawn);
 bot.on("kicked", kicked);
 bot.on("end", end);
 
@@ -311,6 +313,7 @@ function get_state() {
         target_health: get_zombie_health(target),
         attack_hit: pending_attack !== null && attacked_health !== null &&
             attacked_health < pending_attack.health,
+        target_killed: pending_attack !== null && killed_ids.has(pending_attack.target.id),
     };
 }
 
@@ -318,8 +321,15 @@ function vector_to_tuple(vector) {
     return [vector.x, vector.y, vector.z];
 }
 
+const killed_ids = new Set();
+bot.on("entityDead", e => { if (e.name === "zombie") killed_ids.add(e.id); });
+
 function get_nearest_zombie() {
-    return bot.nearestEntity(entity => entity.name === 'zombie');
+    return bot.nearestEntity(e => {
+        if (e.name !== "zombie") return false;
+        const h = get_zombie_health(e);
+        return h === null || h > 0;
+    });
 }
 
 
