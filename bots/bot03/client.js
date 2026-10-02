@@ -35,6 +35,7 @@ let slot = 0;
 let policy = null;
 let epLimit = -1;
 let episode_timer = null;
+let pending_attack = null;
 
 for (const arg of args) {
   if (arg === "instant-run") {
@@ -115,6 +116,7 @@ function kicked(reason, loggedIn) {
 }
 
 function end(reason) {
+    pending_attack = null;
     clear_episode_timer();
     console.log(`[INFO]: Disconnected: ${reason}`);
 
@@ -130,6 +132,7 @@ function setSlot() {
 }
 
 function spawn() {
+    pending_attack = null;
     clear_episode_timer();
 
     if (environment.limit_reached) {
@@ -175,6 +178,7 @@ bot.on("death", () => {
     console.log(`[INFO]: Episode ${environment.episode} just finished!`);
 
     environment.on_death(get_state());
+    pending_attack = null;
     write_transition(environment.pop_transitions());
 });
 
@@ -198,6 +202,7 @@ bot.on("messagestr", (message, messagePosition) => {
             console.log("[INFO]: Turned on")
         } else if (command === "stop") {
             running = false;
+            pending_attack = null;
             bot.clearControlStates();
             console.log("[INFO]: Turned off")
         } else {
@@ -239,6 +244,7 @@ function normalize_yaw(yaw) {
 }
 
 function perform_action(action) {
+    pending_attack = null;
     bot.clearControlStates();
 
     if ("controls" in action) {
@@ -260,6 +266,10 @@ function perform_action(action) {
     if ("attack" in action) {
         const target = bot.entityAtCursor(RANGE);
         if (target) {
+            const health = get_zombie_health(target);
+            if (health !== null && health > 0) {
+                pending_attack = { target, health };
+            }
             bot.attack(target);
         } else {
             bot.swingArm("right");
@@ -270,9 +280,22 @@ function perform_action(action) {
 
 // --- Game State Interpretation ---
 
+function get_zombie_health(entity) {
+    if (!entity || entity.name !== "zombie") {
+        return null;
+    }
+
+    const metadata_keys = bot.registry.entitiesByName.zombie?.metadataKeys;
+    const health_index = metadata_keys ? metadata_keys.indexOf("health") : -1;
+    const health = health_index >= 0 ? entity.metadata?.[health_index] : null;
+    return Number.isFinite(health) && health >= 0 ? health : null;
+}
+
 function get_state() {
     const entity = bot.entity;
     const target = get_nearest_zombie();
+    const offset = target ? matrixAdition(target.position, entity.position) : null;
+    const attacked_health = pending_attack ? get_zombie_health(pending_attack.target) : null;
 
     return {
         // bot state
@@ -283,7 +306,11 @@ function get_state() {
         health: bot.health,
 
         // target
-        target: target ? matrixAdition(target.position, bot.entity.position) : null,
+        target: offset,
+        target_id: target ? target.id : null,
+        target_health: get_zombie_health(target),
+        attack_hit: pending_attack !== null && attacked_health !== null &&
+            attacked_health < pending_attack.health,
     };
 }
 

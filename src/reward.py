@@ -7,18 +7,16 @@ from typing import Any
 
 ATTACK_ACTION = 11
 MAX_PROGRESS = 1.0
-ATTACK_RANGE = 3.3
-HIT_RADIUS = 0.5
-EYE_HEIGHT = 1.62
-ZOMBIE_CENTER_HEIGHT = 0.975
+TICKS_PER_STEP = 2
 
 
 @dataclass(frozen=True)
 class RewardConfig:
-    progress: float = 1
-    kill: float = 100
-    aimed_attack: float = 20
-    damage: float = -5
+    progress: float = 5
+    kill: float = 30
+    aimed_attack: float = 0 # fallback
+    damage_dealt: float = 3 # per-health
+    damage: float = -1
 
 
 @dataclass(frozen=True)
@@ -27,56 +25,47 @@ class Reward:
     inferred_kill: bool
 
 
-def _offset(state: Any) -> tuple[float, float, float] | None:
+def _vector(state: Any, key: str) -> tuple[float, float, float] | None:
     if not isinstance(state, dict):
         return None
     try:
-        x, y, z = (float(value) for value in state.get("target"))
+        x, y, z = (float(value) for value in state.get(key))
     except (TypeError, ValueError):
         return None
     return (x, y, z) if all(math.isfinite(value) for value in (x, y, z)) else None
 
 
-def _health(state: Any) -> float | None:
+def _offset(state: Any) -> tuple[float, float, float] | None:
+    return _vector(state, "target")
+
+
+def _number(state: Any, key: str) -> float | None:
     if not isinstance(state, dict):
         return None
     try:
-        value = float(state.get("health"))
+        value = float(state.get(key))
     except (TypeError, ValueError):
         return None
     return value if math.isfinite(value) else None
+
+
+def _health(state: Any) -> float | None:
+    return _number(state, "health")
+
+
+def _target_health(state: Any) -> float | None:
+    return _number(state, "target_health")
 
 
 def _has_no_target(state: Any) -> bool:
     return isinstance(state, dict) and "target" in state and state["target"] is None
 
 
-def _is_aimed(state: Any) -> bool:
-    offset = _offset(state)
-    if offset is None:
+def _same_target(state: Any, next_state: Any) -> bool:
+    if not isinstance(state, dict) or not isinstance(next_state, dict):
         return False
-    try:
-        yaw = float(state["yaw"])
-        pitch = float(state["pitch"])
-    except (KeyError, TypeError, ValueError):
-        return False
-    if not (math.isfinite(yaw) and math.isfinite(pitch)):
-        return False
-
-    dx, dy, dz = offset
-    dy += ZOMBIE_CENTER_HEIGHT - EYE_HEIGHT  # aim from the eyes at the zombie's center
-    distance = math.sqrt(dx * dx + dy * dy + dz * dz)
-    if not 0 < distance <= ATTACK_RANGE:
-        return False
-
-    look = (
-        -math.sin(yaw) * math.cos(pitch),
-        math.sin(pitch),
-        -math.cos(yaw) * math.cos(pitch),
-    )
-    cosine = (look[0] * dx + look[1] * dy + look[2] * dz) / distance
-    angle = math.acos(max(-1.0, min(1.0, cosine)))
-    return angle <= math.atan2(HIT_RADIUS, distance)
+    old_id = state.get("target_id")
+    return old_id is not None and old_id == next_state.get("target_id")
 
 
 def reward_transition(transition: dict[str, Any], config: RewardConfig | None = None) -> Reward:
@@ -87,17 +76,49 @@ def reward_transition(transition: dict[str, Any], config: RewardConfig | None = 
 
     old_offset = _offset(state)
     new_offset = _offset(next_state)
-    killed = old_offset is not None and _has_no_target(next_state) and not done
+
+    same_target = _same_target(state, next_state)
+    old_th = _target_health(state)
+    new_th = _target_health(next_state)
+
+    killed = (
+        old_offset is not None
+        and not done
+        and (
+            _has_no_target(next_state)
+            or (same_target and new_th is not None and new_th <= 0)
+        )
+    )
 
     value = 0.0
+
+    # Progress toward the zombie
     if old_offset is not None and new_offset is not None:
-        progress = math.hypot(*old_offset) - math.hypot(*new_offset)
-        value += rules.progress * max(-MAX_PROGRESS, min(MAX_PROGRESS, progress))
+        velocity = _vector(next_state, "velocity")
+        distance = math.hypot(*old_offset)
+        if velocity is not None and distance > 0:
+            # Project the bot's movement toward the zombie. Changes in the
+            # zombie's position do not affect this contribution.
+            progress = TICKS_PER_STEP * sum(
+                speed * offset for speed, offset in zip(velocity, old_offset)
+            ) / distance
+            value += rules.progress * max(-MAX_PROGRESS, min(MAX_PROGRESS, progress))
+
+    # Kill
     if killed:
         value += rules.kill
-    if transition.get("action") == ATTACK_ACTION and _is_aimed(state):
+
+    # Damage dealt (dense), with attack_hit as fallback
+    if same_target and old_th is not None and new_th is not None:
+        value += rules.damage_dealt * max(0.0, old_th - new_th)
+    elif (
+        transition.get("action") == ATTACK_ACTION
+        and isinstance(next_state, dict)
+        and next_state.get("attack_hit") is True
+    ):
         value += rules.aimed_attack
 
+    # Damage taken
     old_health = _health(state)
     new_health = _health(next_state)
     if old_health is not None and new_health is not None:
