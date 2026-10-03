@@ -301,6 +301,7 @@ function get_state() {
 
     return {
         // bot state
+        position: vector_to_tuple(entity.position),
         velocity: vector_to_tuple(entity.velocity),
         yaw: entity.yaw,
         pitch: entity.pitch,
@@ -310,6 +311,7 @@ function get_state() {
         // target
         target: offset,
         target_id: target ? target.id : null,
+        target_position: target ? vector_to_tuple(target.position) : null,
         target_health: get_zombie_health(target),
         attack_hit: pending_attack !== null && attacked_health !== null &&
             attacked_health < pending_attack.health,

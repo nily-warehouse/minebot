@@ -6,17 +6,16 @@ from typing import Any
 
 
 ATTACK_ACTION = 11
-MAX_PROGRESS = 1.0
-TICKS_PER_STEP = 2
 
 
 @dataclass(frozen=True)
 class RewardConfig:
-    progress: float = 5
-    kill: float = 30
-    aimed_attack: float = 0 # fallback
-    damage_dealt: float = 3 # per-health
-    damage: float = -1
+    progress: float = 2  # 10 blocks of approach pays 20, versus 80 for one hit
+    attack_range: float = 2.5
+    kill: float = 40 # same as damage_dealt
+    aimed_attack: float = 0  # fallback
+    damage_dealt: float = 40 # per-health
+    damage: float = 0
 
 
 @dataclass(frozen=True)
@@ -91,18 +90,6 @@ def reward_transition(transition: dict[str, Any], config: RewardConfig | None = 
     )
 
     value = 0.0
-
-    # Progress toward the zombie
-    if old_offset is not None and new_offset is not None:
-        velocity = _vector(next_state, "velocity")
-        distance = math.hypot(*old_offset)
-        if velocity is not None and distance > 0:
-            # Project the bot's movement toward the zombie. Changes in the
-            # zombie's position do not affect this contribution.
-            progress = TICKS_PER_STEP * sum(
-                speed * offset for speed, offset in zip(velocity, old_offset)
-            ) / distance
-            value += rules.progress * max(-MAX_PROGRESS, min(MAX_PROGRESS, progress))
 
     # Kill
     if killed:
