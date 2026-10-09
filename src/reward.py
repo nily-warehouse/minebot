@@ -4,8 +4,10 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
+from .actions import attack_index
 
-ATTACK_ACTION = 11
+
+ATTACK_ACTION = attack_index()
 
 
 @dataclass(frozen=True)
@@ -99,7 +101,8 @@ def reward_transition(transition: dict[str, Any], config: RewardConfig | None = 
     if same_target and old_th is not None and new_th is not None:
         value += rules.damage_dealt * max(0.0, old_th - new_th)
     elif (
-        transition.get("action") == ATTACK_ACTION
+        ATTACK_ACTION is not None
+        and transition.get("action") == ATTACK_ACTION
         and isinstance(next_state, dict)
         and next_state.get("attack_hit") is True
     ):

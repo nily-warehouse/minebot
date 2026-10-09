@@ -4,6 +4,8 @@ from typing import Any
 
 import neat
 
+from .actions import enabled_actions
+
 
 INPUTS = [
     {"id": -1, "source": "velocity", "index": 0, "scale": 1.0},
@@ -18,20 +20,7 @@ INPUTS = [
     {"id": -10, "source": "target", "index": 2, "scale": 0.1},
 ]
 
-OUTPUTS = [
-    "noop",
-    "forward",
-    "back",
-    "left",
-    "right",
-    "jump",
-    "sprint_forward",
-    "turn_left",
-    "turn_right",
-    "look_up",
-    "look_down",
-    "attack",
-]
+OUTPUTS = enabled_actions()
 
 
 def load_config(path: str, population_size: int | None = None) -> neat.Config:
@@ -42,6 +31,21 @@ def load_config(path: str, population_size: int | None = None) -> neat.Config:
         neat.DefaultStagnation,
         path,
     )
+
+    genome_config = config.genome_config
+    if genome_config.num_outputs != len(OUTPUTS):
+        raise ValueError(
+            f"neat_config.ini has num_outputs = {genome_config.num_outputs}, "
+            f"but actions.json has {len(OUTPUTS)} enabled actions. "
+            f"Set num_outputs = {len(OUTPUTS)} in neat_config.ini."
+        )
+    if genome_config.num_inputs != len(INPUTS):
+        raise ValueError(
+            f"neat_config.ini has num_inputs = {genome_config.num_inputs}, "
+            f"but INPUTS has {len(INPUTS)} entries. "
+            f"Set num_inputs = {len(INPUTS)} in neat_config.ini."
+        )
+
     if population_size is not None:
         if population_size < 2:
             raise ValueError("population must contain at least two brains")
