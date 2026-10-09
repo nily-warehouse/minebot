@@ -52,6 +52,7 @@ class HarnessEvaluator:
                 f"ep:{self.harness.episodes}",
                 f"policy:{job.model_name}",
                 f"slot:{slot}",
+                f"config:{self.harness.config_id}",
                 cwd=str(self.harness.project_root),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,

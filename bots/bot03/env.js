@@ -1,6 +1,6 @@
 const { loadModel, decide } = require('./policy')
 
-const TURN_STEP = Math.PI / 12;
+const { TURN_STEP } = require('./configs/1/commands');
 
 class Decision {
     constructor(state, action) {
@@ -20,35 +20,9 @@ class Transition {
 
 
 class MinecraftEnv {
-    static COMMANDS = {
-        "noop":
-            {},
-        "forward":
-            { "controls": ["forward"] },
-        "back":
-            { "controls": ["back"] },
-        "left":
-            { "controls": ["left"] },
-        "right":
-            { "controls": ["right"] },
-        "jump":
-            { "controls": ["jump"] },
-        "sprint_forward":
-            { "controls": ["forward", "sprint"] },
-        "turn_left":
-            { "dyaw": TURN_STEP },
-        "turn_right":
-            { "dyaw": -TURN_STEP },
-        "look_up":
-            { "dpitch": TURN_STEP },
-        "look_down":
-            { "dpitch": -TURN_STEP },
-        "attack":
-            { "attack": true },
-    };
-    static ACTIONS = Object.keys(MinecraftEnv.COMMANDS);
-
-    constructor(policy = null, epLimit = -1, tick_every = 2) {
+    constructor(policy = null, epLimit = -1, tick_every = 2, config = 1) {
+        this.COMMANDS = require(`./configs/${config}/commands`).COMMANDS;
+        this.ACTIONS = Object.keys(this.COMMANDS);
         this.policy = policy ? loadModel('./pool/models/' + policy) : null;
         this.epLimit = epLimit != -1 ? epLimit : 1
         this.tick_every = tick_every;
@@ -57,14 +31,6 @@ class MinecraftEnv {
         this.transitions = [];
         this._pending = null;
         this.episode = 1;
-    }
-
-    get COMMANDS() {
-        return MinecraftEnv.COMMANDS;
-    }
-
-    get ACTIONS() {
-        return MinecraftEnv.ACTIONS;
     }
 
     get n_actions() {

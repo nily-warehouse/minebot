@@ -34,6 +34,7 @@ let running = false;
 let slot = 0;
 let policy = null;
 let epLimit = -1;
+let config = 1;
 let episode_timer = null;
 let pending_attack = null;
 
@@ -74,6 +75,17 @@ for (const arg of args) {
     policy = value;
   }
 
+  else if (key === "config") {
+    const parsedConfig = Number(value);
+
+    if (!/^\d+$/.test(value) || !Number.isSafeInteger(parsedConfig) || parsedConfig < 1) {
+      console.error("Config must be a positive integer!");
+      process.exit(1);
+    }
+
+    config = parsedConfig;
+  }
+
   else if (key === "ep") {
     const parsedEP = Number(value)
     
@@ -86,7 +98,7 @@ for (const arg of args) {
   }
 }
 
-const environment = new MinecraftEnv(policy, epLimit);
+const environment = new MinecraftEnv(policy, epLimit, 2, config);
 const writer = new TransitionWriter(slot);
 
 
