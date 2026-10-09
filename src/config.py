@@ -14,6 +14,7 @@ class HarnessConfig:
 
     project_root: Path = PROJECT_ROOT
     episodes: int = 3
+    episode_timeout_seconds = 60
 
     @property
     def client_path(self) -> Path:

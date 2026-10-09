@@ -57,13 +57,24 @@ class HarnessEvaluator:
         except OSError:
             consume_transition_file(transition_path)
             raise
+
+        timeout = self.harness.episodes * self.harness.episode_timeout_seconds + 60
+        timed_out = False
+        
         try:
-            output, _ = await process.communicate()
+            try:
+                output, _ = await asyncio.wait_for(process.communicate(), timeout=timeout)
+            except asyncio.TimeoutError:
+                timed_out = True
+                process.kill()
+                output, _ = await process.communicate()
+        
         except asyncio.CancelledError:
             if process.returncode is None:
                 process.terminate()
                 await process.wait()
             raise
+        
         finally:
             transitions, _ = consume_transition_file(transition_path)
 
