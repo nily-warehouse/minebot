@@ -1,5 +1,8 @@
 from .fitness import FitnessReport, evaluate_fitness
-from .reward import RewardConfig, reward_transition
+from .configs import reward_module
+
+RewardConfig = reward_module().RewardConfig
+reward_transition = reward_module().reward_transition
 
 __all__ = [
     "FitnessReport",

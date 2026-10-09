@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-ACTIONS_FILE = Path(__file__).resolve().with_name("actions.json")
+ACTIONS_FILE = Path(__file__).resolve().parent / "configs" / "1" / "actions.json"
 
 
 def load_action_spec(path: Path = ACTIONS_FILE) -> dict[str, Any]:

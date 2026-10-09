@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from .config import SERVER_SLOTS, HarnessConfig
+from .configs import reward_module
 from .fitness import FitnessReport, evaluate_fitness
 from .transitions import clear_transition_file, consume_transition_file
 
@@ -37,6 +38,7 @@ class HarnessEvaluator:
         if harness.episodes < 1:
             raise ValueError("episodes must be at least 1")
         self.harness = harness
+        self.reward_config = reward_module(harness.config_id).RewardConfig()
 
     async def evaluate_one(self, job: EvaluationJob, slot: int) -> EvaluationResult:
         started_at = time.monotonic()
@@ -81,6 +83,8 @@ class HarnessEvaluator:
         report = evaluate_fitness(
             transitions,
             expected_episodes=self.harness.episodes,
+            config=self.reward_config,
+            config_id=self.harness.config_id,
         )
         text = output.decode("utf-8", errors="replace")
         return EvaluationResult(

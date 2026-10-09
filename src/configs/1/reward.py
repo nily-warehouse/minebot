@@ -2,16 +2,18 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
-from .actions import attack_index
+from ...actions import attack_index
 
 
-ATTACK_ACTION = attack_index()
+ATTACK_ACTION = attack_index(Path(__file__).resolve().with_name("actions.json"))
 
 
 @dataclass(frozen=True)
 class RewardConfig:
+    attack_action: int | None = ATTACK_ACTION
     progress: float = 2  # 10 blocks of approach pays 20, versus 80 for one hit
     attack_range: float = 2.5
     kill: float = 40 # same as damage_dealt
@@ -101,8 +103,8 @@ def reward_transition(transition: dict[str, Any], config: RewardConfig | None = 
     if same_target and old_th is not None and new_th is not None:
         value += rules.damage_dealt * max(0.0, old_th - new_th)
     elif (
-        ATTACK_ACTION is not None
-        and transition.get("action") == ATTACK_ACTION
+        rules.attack_action is not None
+        and transition.get("action") == rules.attack_action
         and isinstance(next_state, dict)
         and next_state.get("attack_hit") is True
     ):

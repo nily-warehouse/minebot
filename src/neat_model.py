@@ -4,7 +4,7 @@ from typing import Any
 
 import neat
 
-from .actions import enabled_actions
+from .actions import ACTIONS_FILE, enabled_actions
 
 
 INPUTS = [
@@ -23,7 +23,13 @@ INPUTS = [
 OUTPUTS = enabled_actions()
 
 
-def load_config(path: str, population_size: int | None = None) -> neat.Config:
+def load_config(
+    path: str,
+    population_size: int | None = None,
+    outputs: list[str] | None = None,
+    actions_file: str = str(ACTIONS_FILE),
+) -> neat.Config:
+    output_names = OUTPUTS if outputs is None else outputs
     config = neat.Config(
         neat.DefaultGenome,
         neat.DefaultReproduction,
@@ -33,23 +39,24 @@ def load_config(path: str, population_size: int | None = None) -> neat.Config:
     )
 
     genome_config = config.genome_config
-    if genome_config.num_outputs != len(OUTPUTS):
+    if genome_config.num_outputs != len(output_names):
         raise ValueError(
-            f"neat_config.ini has num_outputs = {genome_config.num_outputs}, "
-            f"but actions.json has {len(OUTPUTS)} enabled actions. "
-            f"Set num_outputs = {len(OUTPUTS)} in neat_config.ini."
+            f"{path} has num_outputs = {genome_config.num_outputs}, "
+            f"but {actions_file} has {len(output_names)} enabled actions. "
+            f"Set num_outputs = {len(output_names)} in {path}."
         )
     if genome_config.num_inputs != len(INPUTS):
         raise ValueError(
-            f"neat_config.ini has num_inputs = {genome_config.num_inputs}, "
+            f"{path} has num_inputs = {genome_config.num_inputs}, "
             f"but INPUTS has {len(INPUTS)} entries. "
-            f"Set num_inputs = {len(INPUTS)} in neat_config.ini."
+            f"Set num_inputs = {len(INPUTS)} in {path}."
         )
 
     if population_size is not None:
         if population_size < 2:
             raise ValueError("population must contain at least two brains")
         config.pop_size = population_size
+    config.action_names = list(output_names)
     return config
 
 
@@ -118,7 +125,7 @@ def genome_to_model(
         "generation": generation,
         "genome_id": genome.key,
         "inputs": INPUTS,
-        "outputs": OUTPUTS,
+        "outputs": getattr(config, "action_names", OUTPUTS),
         "nodes": nodes,
         "connections": connections,
         "fitness": 0.0 if genome.fitness is None else genome.fitness,

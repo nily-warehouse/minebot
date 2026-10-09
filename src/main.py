@@ -88,6 +88,14 @@ def _parser() -> argparse.ArgumentParser:
         metavar="COUNT",
         help="episodes per brain (default: 3)",
     )
+    for command in (initialize, train):
+        command.add_argument(
+            "--config",
+            type=_positive_int,
+            default=1,
+            metavar="ID",
+            help="configuration directory under src/configs (default: 1)",
+        )
     return parser
 
 
@@ -243,13 +251,15 @@ def main(argv: list[str] | None = None) -> None:
     try:
         if args.command == "init":
             console.init_started(args.population)
-            harness = HarnessConfig(project_root=PROJECT_ROOT)
+            harness = HarnessConfig(project_root=PROJECT_ROOT, config_id=args.config)
             trainer = Trainer.create(harness, args.population)
             names = trainer.initialize()
             console.init_finished(trainer, len(names))
             return
 
-        harness = HarnessConfig(project_root=PROJECT_ROOT, episodes=args.episodes)
+        harness = HarnessConfig(
+            project_root=PROJECT_ROOT, episodes=args.episodes, config_id=args.config
+        )
         trainer = Trainer.restore(harness, args.from_generation)
         console.train_started(
             trainer,

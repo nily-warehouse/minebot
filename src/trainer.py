@@ -12,7 +12,9 @@ from typing import Callable
 
 import neat
 
-from .config import NEAT_CONFIG, HarnessConfig
+from .config import HarnessConfig
+from .actions import enabled_actions
+from .configs import config_dir
 from .evaluator import EvaluationCallback, EvaluationResult, HarnessEvaluator
 from .neat_model import genome_to_model, load_config
 
@@ -52,7 +54,12 @@ class Trainer:
 
     @classmethod
     def create(cls, harness: HarnessConfig, population_size: int) -> "Trainer":
-        config = load_config(str(NEAT_CONFIG), population_size)
+        actions_file = config_dir(harness.config_id) / "actions.json"
+        config = load_config(
+            str(harness.neat_config), population_size,
+            outputs=enabled_actions(actions_file), actions_file=str(actions_file),
+        )
+        config.config_id = harness.config_id
         return cls(harness, neat.Population(config))
 
     @classmethod
@@ -67,6 +74,22 @@ class Trainer:
         if not checkpoint.is_file():
             raise FileNotFoundError(f"generation {generation} does not exist: {checkpoint}")
         population = neat.Checkpointer.restore_checkpoint(str(checkpoint))
+        actions_file = config_dir(harness.config_id) / "actions.json"
+        selected_config = load_config(
+            str(harness.neat_config),
+            outputs=enabled_actions(actions_file), actions_file=str(actions_file),
+        )
+        saved_id = getattr(population.config, "config_id", 1)
+        if saved_id != harness.config_id:
+            raise ValueError(
+                f"checkpoint uses config {saved_id}, requested config {harness.config_id}"
+            )
+        saved_actions = getattr(population.config, "action_names", selected_config.action_names)
+        if (saved_actions != selected_config.action_names
+            or population.config.genome_config.num_outputs != len(selected_config.action_names)):
+            raise ValueError("selected actions do not match the checkpoint")
+        population.config.action_names = selected_config.action_names
+        population.config.config_id = harness.config_id
         if population.generation != generation:
             raise ValueError(
                 f"checkpoint contains generation {population.generation}, "
