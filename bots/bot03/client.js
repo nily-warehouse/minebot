@@ -25,6 +25,11 @@ if (!Number.isFinite(EPISODE_TIMEOUT_SECONDS) || EPISODE_TIMEOUT_SECONDS <= 0) {
 
 const EPISODE_TIMEOUT_MS = EPISODE_TIMEOUT_SECONDS * 1000;
 
+let teleporting = false;
+let tp_ticks = 0;
+const TP_TIMEOUT_TICKS = 40;
+
+
 // - initial setup -
 
 const args = process.argv.slice(2);
@@ -156,8 +161,19 @@ function spawn() {
         return
     }
 
-    bot.chat(`/tp ${NAME} 8.5 -60 8.5`)
-    start_episode_timer();
+    teleporting = true;
+    send_tp();
+}
+
+function near_spawn() {
+    const p = bot.entity.position;
+    return Math.abs(p.x - 8.5) < 0.5 && Math.abs(p.y + 60) < 0.5 && Math.abs(p.z - 8.5) < 0.5;
+}
+
+function send_tp() {
+    bot.clearControlStates();
+    bot.chat(`/tp ${NAME} 8.5 -60 8.5`);
+    tp_ticks = 0;
 }
 
 function clear_episode_timer() {
@@ -236,6 +252,16 @@ function execute() {
 }
 
 bot.on("physicsTick", () => {
+    if (teleporting) {
+        if (near_spawn()) {
+            teleporting = false;
+            start_episode_timer();
+        } else if (++tp_ticks >= TP_TIMEOUT_TICKS) {
+            send_tp();
+        }
+        return;
+    }
+
     tick_counter += 1;
 
     if (tick_counter >= environment.tick_every) {
