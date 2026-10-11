@@ -1,0 +1,2 @@
+dotenv
+neat-python==2.0.0
