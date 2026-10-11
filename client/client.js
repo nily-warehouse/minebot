@@ -1,7 +1,7 @@
 const path = require("path");
 const dotenv = require("dotenv");
 const mineflayer = require("mineflayer");
-const { MinecraftEnv, Transition, Decision } = require("./env");
+const { MinecraftEnv } = require("./env");
 const { TransitionWriter } = require("./recorder");
 
 
@@ -13,15 +13,12 @@ const env_path = path.resolve(__dirname, ".env");
 dotenv.config({ path: env_path });
 
 let   NAME = process.env.BOTNAME;
-const RANGE = Number.parseInt(process.env.RANGE, 10);
 const HOST = process.env.HOST;
 const PORT = 25565
 const VERSION = process.env.MINECRAFT_VERSION;
+const ITEM_TARGET_RANGE = Number.parseFloat(process.env.RANGE);
+const VERBOSE = /^(1|true|yes|on)$/i.test(process.env.VERBOSE || "");
 const EPISODE_TIMEOUT_SECONDS = Number(process.env.EPISODE_TIMEOUT_SECONDS);
-
-if (!Number.isFinite(EPISODE_TIMEOUT_SECONDS) || EPISODE_TIMEOUT_SECONDS <= 0) {
-    throw new Error("EPISODE_TIMEOUT_SECONDS must be a positive number");
-}
 
 const EPISODE_TIMEOUT_MS = EPISODE_TIMEOUT_SECONDS * 1000;
 
@@ -41,9 +38,9 @@ let policy = null;
 let epLimit = -1;
 let config = 1;
 let episode_timer = null;
-let pending_attack = null;
-const attacked_targets = new Map();
-const combat_events = [];
+let current_target_id = null;
+let current_target_completed = false;
+let no_target_logged = false;
 
 for (const arg of args) {
   if (arg === "instant-run") {
@@ -135,7 +132,6 @@ function kicked(reason, loggedIn) {
 }
 
 function end(reason) {
-    pending_attack = null;
     clear_episode_timer();
     console.log(`[INFO]: Disconnected: ${reason}`);
 
@@ -151,11 +147,9 @@ function setSlot() {
 }
 
 function spawn() {
-    killed_ids.clear()
-    attacked_targets.clear();
-    combat_events.length = 0;
-
-    pending_attack = null;
+    current_target_id = null;
+    current_target_completed = false;
+    no_target_logged = false;
     clear_episode_timer();
 
     if (environment.limit_reached) {
@@ -205,6 +199,18 @@ bot.on('spawn', spawn);
 bot.on("kicked", kicked);
 bot.on("end", end);
 
+bot.on("playerCollect", (collector, collected) => {
+    if (collector?.id !== bot.entity?.id || collected?.id !== current_target_id ||
+        current_target_completed) {
+        return;
+    }
+
+    current_target_completed = true;
+    log_target(
+        `Target achieved: dropped item ${current_target_id} was collected by the bot.`
+    );
+});
+
 // --- Running and Death Managment ---
 
 bot.on("death", () => {
@@ -212,7 +218,6 @@ bot.on("death", () => {
     console.log(`[INFO]: Episode ${environment.episode} just finished!`);
 
     environment.on_death(get_state());
-    pending_attack = null;
     write_transition(environment.pop_transitions());
 });
 
@@ -236,7 +241,6 @@ bot.on("messagestr", (message, messagePosition) => {
             console.log("[INFO]: Turned on")
         } else if (command === "stop") {
             running = false;
-            pending_attack = null;
             bot.clearControlStates();
             console.log("[INFO]: Turned off")
         } else {
@@ -288,7 +292,6 @@ function normalize_yaw(yaw) {
 }
 
 function perform_action(action) {
-    pending_attack = null;
     bot.clearControlStates();
 
     if ("controls" in action) {
@@ -306,62 +309,34 @@ function perform_action(action) {
         );
         bot.look(new_yaw, new_pitch);
     }
-
-    if ("attack" in action) {
-        const target = bot.entityAtCursor(RANGE);
-        if (target) {
-            const health = get_zombie_health(target);
-            if (health !== null && health > 0) {
-                pending_attack = { target, health };
-                if (!attacked_targets.has(target.id)) {
-                    attacked_targets.set(target.id, { health, killed: false });
-                }
-            }
-            bot.attack(target);
-        } else {
-            bot.swingArm("right");
-        }
-    }
 }
 
 
 // --- Game State Interpretation ---
 
-function get_zombie_health(entity) {
-    if (!entity || entity.name !== "zombie") {
-        return null;
-    }
-
-    const metadata_keys = bot.registry.entitiesByName.zombie?.metadataKeys;
-    const health_index = metadata_keys ? metadata_keys.indexOf("health") : -1;
-    const health = health_index >= 0 ? entity.metadata?.[health_index] : null;
-    return Number.isFinite(health) && health >= 0 ? health : null;
-}
-
 function get_state() {
     const entity = bot.entity;
-    const target = get_nearest_zombie();
+    const target = get_current_target();
     const offset = target ? matrixAdition(target.position, entity.position) : null;
-    const attacked_health = pending_attack ? get_zombie_health(pending_attack.target) : null;
+    const target_distance = target ? distance_between(entity.position, target.position) : null;
+    const target_in_range = target_distance !== null &&
+        target_distance <= ITEM_TARGET_RANGE && !current_target_completed;
 
     return {
-        // bot state
-        position: vector_to_tuple(entity.position),
+        // // bot state
+        // position: vector_to_tuple(entity.position),
         velocity: vector_to_tuple(entity.velocity),
         yaw: entity.yaw,
-        pitch: entity.pitch,
-        on_ground: entity.onGround,
-        health: bot.health,
+        // pitch: entity.pitch,
+        // on_ground: entity.onGround,
+        // health: bot.health,
 
-        // target
-        target: offset,
-        target_id: target ? target.id : null,
-        target_position: target ? vector_to_tuple(target.position) : null,
-        target_health: get_zombie_health(target),
-        attack_hit: pending_attack !== null && attacked_health !== null &&
-            attacked_health < pending_attack.health,
-        target_killed: pending_attack !== null && killed_ids.has(pending_attack.target.id),
-        combat_events: combat_events.splice(0),
+        // // target
+        // target: offset,
+        // target_id: target ? target.id : null,
+        // target_position: target ? vector_to_tuple(target.position) : null,
+        target_distance,
+        // target_in_range,
     };
 }
 
@@ -369,35 +344,47 @@ function vector_to_tuple(vector) {
     return [vector.x, vector.y, vector.z];
 }
 
-const killed_ids = new Set();
-bot.on("entityUpdate", entity => record_combat_update(entity));
-bot.on("entityDead", entity => {
-    if (entity.name === "zombie") {
-        killed_ids.add(entity.id);
-        record_combat_update(entity, true);
-    }
-});
+function get_current_target() {
+    if (current_target_id !== null) {
+        const target = bot.entities[current_target_id];
+        if (target?.name === "item" && target.position != null) {
+            return target;
+        }
 
-function record_combat_update(entity, died = false) {
-    const tracked = attacked_targets.get(entity.id);
-    if (!tracked || tracked.killed) return;
-    const health = died ? 0 : get_zombie_health(entity);
-    if (health === null) return;
-    const damage = Math.max(0, tracked.health - health);
-    const killed = died || health <= 0;
-    tracked.health = health;
-    tracked.killed = killed;
-    if (damage > 0 || killed) {
-        combat_events.push({ target_id: entity.id, damage, killed });
+        if (!current_target_completed) {
+            log_target(`Target lost: dropped item ${current_target_id} disappeared.`);
+        }
+        current_target_id = null;
+        current_target_completed = false;
     }
+
+    const candidate = bot.nearestEntity(e => {
+        if (e.name !== "item" || e.position == null) return false;
+        return distance_between(bot.entity.position, e.position) <= ITEM_TARGET_RANGE;
+    });
+
+    if (!candidate) {
+        if (!no_target_logged) {
+            log_target(`No dropped item within RANGE=${ITEM_TARGET_RANGE} blocks.`);
+            no_target_logged = true;
+        }
+        return null;
+    }
+
+    current_target_id = candidate.id;
+    current_target_completed = false;
+    no_target_logged = false;
+    log_target(
+        `Detected dropped item ${candidate.id} at ` +
+        `${distance_between(bot.entity.position, candidate.position).toFixed(2)} blocks.`
+    );
+    return candidate;
 }
 
-function get_nearest_zombie() {
-    return bot.nearestEntity(e => {
-        if (e.name !== "zombie") return false;
-        const h = get_zombie_health(e);
-        return h === null || h > 0;
-    });
+function log_target(message) {
+    if (VERBOSE) {
+        console.log(`[TARGET] ${message}`);
+    }
 }
 
 
@@ -412,6 +399,13 @@ function write_transition(transitions) {
 
 function matrixAdition(a, b) {
     return [a.x - b.x, a.y - b.y, a.z - b.z]
+}
+
+function distance_between(a, b) {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    const dz = a.z - b.z;
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
 

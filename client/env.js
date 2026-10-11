@@ -23,6 +23,8 @@ class MinecraftEnv {
     constructor(policy = null, epLimit = -1, tick_every = 2, config = 1) {
         this.COMMANDS = require(`./configs/${config}/commands`).COMMANDS;
         this.ACTIONS = Object.keys(this.COMMANDS);
+        this.noop_action = this.ACTIONS.indexOf("noop");
+        if (this.noop_action < 0) this.noop_action = 0;
         this.policy = policy ? loadModel('./pool/models/' + policy) : null;
         this.epLimit = epLimit != -1 ? epLimit : 1
         this.tick_every = tick_every;
@@ -47,8 +49,8 @@ class MinecraftEnv {
     on_tick(state) {
         this._finish_pending_step(state, false);
         
-        let action = 0
-        if (state.target != null && this.policy != null) {
+        let action = this.noop_action;
+        if (state.target_in_range === true && this.policy != null) {
             action = decide(this.policy, state);
         }
         
