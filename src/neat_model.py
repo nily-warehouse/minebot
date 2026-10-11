@@ -9,16 +9,9 @@ from .actions import ACTIONS_FILE, enabled_actions
 
 
 INPUTS = [
-    {"id": -1, "source": "velocity", "index": 0, "scale": 1.0},
-    {"id": -2, "source": "velocity", "index": 1, "scale": 1.0},
-    {"id": -3, "source": "velocity", "index": 2, "scale": 1.0},
-    {"id": -4, "source": "yaw", "scale": 0.3183},
-    {"id": -5, "source": "pitch", "scale": 0.6366},
-    {"id": -6, "source": "on_ground", "scale": 1.0},
-    {"id": -7, "source": "health", "scale": 0.05},
-    {"id": -8, "source": "target", "index": 0, "scale": 0.1},
-    {"id": -9, "source": "target", "index": 1, "scale": 0.1},
-    {"id": -10, "source": "target", "index": 2, "scale": 0.1},
+    {"id": -1, "source": "target_forward" , "scale": 1 / 6},  # how far ahead the item is
+    {"id": -2, "source": "target_right"   , "scale": 1 / 6},  # >0: item is on the right
+    {"id": -3, "source": "target_distance", "scale": 1 / 6},  # includes height difference
 ]
 
 OUTPUTS = enabled_actions()

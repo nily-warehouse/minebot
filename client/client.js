@@ -322,21 +322,22 @@ function get_state() {
     const target_in_range = target_distance !== null &&
         target_distance <= ITEM_TARGET_RANGE && !current_target_completed;
 
+    const yaw = entity.yaw;
+    // target offset in the bot's own frame (yaw 0 faces -z, turn_left = +yaw)
+    const target_forward = offset ? -offset[0] * Math.sin(yaw) - offset[2] * Math.cos(yaw) : null;
+    const target_right   = offset ?  offset[0] * Math.cos(yaw) - offset[2] * Math.sin(yaw) : null;
+
     return {
-        // // bot state
-        // position: vector_to_tuple(entity.position),
+        // bot
         velocity: vector_to_tuple(entity.velocity),
         yaw: entity.yaw,
-        // pitch: entity.pitch,
-        // on_ground: entity.onGround,
-        // health: bot.health,
 
-        // // target
-        // target: offset,
-        // target_id: target ? target.id : null,
-        // target_position: target ? vector_to_tuple(target.position) : null,
+        // target
+        target_id: target ? target.id : null,
         target_distance,
-        // target_in_range,
+        target_in_range,
+        target_forward,
+        target_right,
     };
 }
 

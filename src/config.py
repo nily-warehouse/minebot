@@ -15,7 +15,7 @@ class HarnessConfig:
     project_root: Path = PROJECT_ROOT
     episodes: int = 3
     config_id: int = 1
-    episode_timeout_seconds = 45
+    episode_timeout_seconds = 60
 
     @property
     def neat_config(self) -> Path:
@@ -23,7 +23,7 @@ class HarnessConfig:
 
     @property
     def client_path(self) -> Path:
-        return self.project_root / "bots" / "bot03" / "client.js"
+        return self.project_root / "client" / "client.js"
 
     @property
     def models_dir(self) -> Path:
