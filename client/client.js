@@ -26,6 +26,15 @@ let teleporting = false;
 let tp_ticks = 0;
 const TP_TIMEOUT_TICKS = 40;
 
+// - Arena setup -
+
+const centerX = Number.parseFloat(process.env.CENTERX);
+const centerY = Number.parseFloat(process.env.CENTERY);
+const centerZ = Number.parseFloat(process.env.CENTERZ);
+const upperBoundX = Number(process.env.upperBoundX);
+const lowerBoundX = Number(process.env.lowerBoundX);
+const upperBoundZ = Number(process.env.upperBoundZ);
+const lowerBoundZ = Number(process.env.lowerBoundZ);
 
 // - initial setup -
 
@@ -163,6 +172,9 @@ function spawn() {
     send_tp();
 }
 
+
+// initial teleport
+
 function near_spawn() {
     const p = bot.entity.position;
     return Math.abs(p.x - 8.5) < 0.5 && Math.abs(p.y + 60) < 0.5 && Math.abs(p.z - 8.5) < 0.5;
@@ -170,7 +182,7 @@ function near_spawn() {
 
 function send_tp() {
     bot.clearControlStates();
-    bot.chat(`/tp ${NAME} 8.5 -60 8.5`);
+    bot.chat(`/tp ${NAME} ${centerX} ${centerY} ${centerZ}`);
     tp_ticks = 0;
 }
 
@@ -256,6 +268,7 @@ function execute() {
     if (running) {
         const action = environment.on_tick(get_state());
         perform_action(action);
+        checkArena();
     }
 }
 
@@ -278,6 +291,21 @@ bot.on("physicsTick", () => {
     }
 });
 
+
+// --- Arena border magnagement ---
+
+function checkArena() {
+    boundCheck = (
+        bot.entity.position.x < lowerBoundX ||
+        bot.entity.position.x > upperBoundX ||
+        bot.entity.position.z < lowerBoundZ ||
+        bot.entity.position.z > upperBoundZ
+    )
+
+    if (boundCheck){
+        bot.chat(`/tp ${NAME} ${centerX} ${centerY} ${centerZ}`);
+    }
+}
 
 // --- Action ---
 
