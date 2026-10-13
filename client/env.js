@@ -58,7 +58,7 @@ class MinecraftEnv {
         return this.COMMANDS[this.ACTIONS[action]];
     }
 
-    on_death(last_state = null) {
+    end_episode(last_state = null) {
         this.episode += 1;
         if (this._pending === null) {
             return;

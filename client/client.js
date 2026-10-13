@@ -16,12 +16,20 @@ dotenv.config({ path: env_path });
 let   NAME = process.env.BOTNAME;
 const HOST = process.env.HOST;
 const PORT = 25565
-const VERSION = process.env.MINECRAFT_VERSION;
+const VERSION = process.env.MINECRAFT_VERSION || process.env.VERSION;
 const ITEM_TARGET_RANGE = Number.parseFloat(process.env.RANGE);
 const VERBOSE = /^(1|true|yes|on)$/i.test(process.env.VERBOSE || "");
 const EPISODE_TIMEOUT_SECONDS = Number(process.env.EPISODE_TIMEOUT_SECONDS);
 
+const STARTUP_TIMEOUT_MS = 30_000;
+const TELEPORT_TIMEOUT_MS = 15_000;
+const RESPAWN_TIMEOUT_MS = 15_000;
 const EPISODE_TIMEOUT_MS = EPISODE_TIMEOUT_SECONDS * 1000;
+
+if (!Number.isFinite(EPISODE_TIMEOUT_SECONDS) || EPISODE_TIMEOUT_SECONDS <= 0) {
+    console.error("[ERROR]: EPISODE_TIMEOUT_SECONDS must be a positive number.");
+    process.exit(1);
+}
 
 let teleporting = false;
 let tp_ticks = 0;
@@ -38,6 +46,10 @@ let policy = null;
 let epLimit = -1;
 let config = 1;
 let episode_timer = null;
+let lifecycle_timer = null;
+let evaluation_finished = false;
+let evaluation_failed = false;
+let episode_active = false;
 let current_target_id = null;
 let current_target_completed = false;
 let no_target_logged = false;
@@ -184,6 +196,52 @@ const bot = mineflayer.createBot({
     hideErrors: true
 });
 
+function clear_lifecycle_timer() {
+    if (lifecycle_timer !== null) {
+        clearTimeout(lifecycle_timer);
+        lifecycle_timer = null;
+    }
+}
+
+function arm_lifecycle_timer(timeout_ms, message) {
+    clear_lifecycle_timer();
+    lifecycle_timer = setTimeout(() => fail_evaluation(message), timeout_ms);
+}
+
+function fail_evaluation(message) {
+    if (evaluation_finished || evaluation_failed) {
+        return;
+    }
+
+    evaluation_failed = true;
+    running = false;
+    teleporting = false;
+    clear_episode_timer();
+    clear_lifecycle_timer();
+    console.error(`[ERROR]: ${message}`);
+    try {
+        bot.quit();
+    } catch (error) {
+        console.error(`[ERROR]: Could not close the bot connection: ${error.message || error}`);
+    }
+    setTimeout(() => process.exit(1), 1000);
+}
+
+function finish_evaluation() {
+    if (evaluation_finished || evaluation_failed) {
+        return;
+    }
+
+    evaluation_finished = true;
+    running = false;
+    teleporting = false;
+    clear_episode_timer();
+    clear_lifecycle_timer();
+    console.log("Episode Limit reached");
+    bot.quit();
+    setTimeout(() => process.exit(0), 1000);
+}
+
 function login() {
     const bot_socket = bot._client.socket;
     console.log(
@@ -199,30 +257,50 @@ function kicked(reason, loggedIn) {
     }
 }
 
+function handle_kicked(reason, loggedIn) {
+    kicked(reason, loggedIn);
+    fail_evaluation(`Kicked from the server: ${reason}`);
+}
+
 function end(reason) {
     clear_episode_timer();
     console.log(`[INFO]: Disconnected: ${reason}`);
 
+    if (!evaluation_finished && !evaluation_failed) {
+        fail_evaluation(`Disconnected before evaluation completed: ${reason}`);
+    }
+
     bot.removeListener("login", login);
-    bot.removeListener("kicked", kicked);
+    bot.removeListener("kicked", handle_kicked);
     bot.removeListener("end", end);
 }
 
-function spawn() {
+function begin_episode() {
+    if (evaluation_finished || evaluation_failed) {
+        return;
+    }
+
+    clear_lifecycle_timer();
     current_target_id = null;
     current_target_completed = false;
     no_target_logged = false;
     clear_episode_timer();
 
     if (environment.limit_reached) {
-        running = false;
-        console.log("Episode Limit reached");
-        bot.quit();
+        finish_evaluation();
         return
     }
 
     teleporting = true;
     send_tp();
+    arm_lifecycle_timer(
+        TELEPORT_TIMEOUT_MS,
+        `Timed out waiting to reach the arena center for episode ${environment.episode}.`
+    );
+}
+
+function spawn() {
+    begin_episode();
 }
 
 
@@ -248,6 +326,20 @@ function clear_episode_timer() {
     }
 }
 
+function finish_episode(last_state) {
+    if (!episode_active) {
+        return false;
+    }
+
+    episode_active = false;
+    clear_episode_timer();
+    clear_lifecycle_timer();
+    console.log(`[INFO]: Episode ${environment.episode} just finished!`);
+    environment.end_episode(last_state);
+    write_transition(environment.pop_transitions());
+    return true;
+}
+
 function start_episode_timer() {
     clear_episode_timer();
     episode_timer = setTimeout(() => {
@@ -256,14 +348,30 @@ function start_episode_timer() {
             `[INFO]: Episode ${environment.episode} reached the ` +
             `${EPISODE_TIMEOUT_SECONDS}s timeout`
         );
-        bot.chat(`/kill ${NAME}`);
+        if (!finish_episode(get_state())) {
+            return;
+        }
+
+        if (environment.limit_reached) {
+            finish_evaluation();
+        } else {
+            begin_episode();
+        }
     }, EPISODE_TIMEOUT_MS);
 }
 
 bot.on("login", login);
 bot.on('spawn', spawn);
-bot.on("kicked", kicked);
+bot.on("kicked", handle_kicked);
+bot.on("error", error => {
+    console.error(`[ERROR]: Mineflayer error: ${error.message || error}`);
+});
 bot.on("end", end);
+
+arm_lifecycle_timer(
+    STARTUP_TIMEOUT_MS,
+    "Timed out waiting for the bot to spawn after connecting."
+);
 
 bot.on("playerCollect", (collector, collected) => {
     if (collector?.id !== bot.entity?.id || collected?.id !== current_target_id ||
@@ -282,11 +390,19 @@ bot.on("playerCollect", (collector, collected) => {
 // --- Running and Death Managment ---
 
 bot.on("death", () => {
-    clear_episode_timer();
-    console.log(`[INFO]: Episode ${environment.episode} just finished!`);
+    const ended_episode = finish_episode(get_state());
+    clear_lifecycle_timer();
 
-    environment.on_death(get_state());
-    write_transition(environment.pop_transitions());
+    if (environment.limit_reached) {
+        finish_evaluation();
+    } else {
+        arm_lifecycle_timer(
+            RESPAWN_TIMEOUT_MS,
+            ended_episode
+                ? `Timed out waiting for the bot to respawn after episode ${environment.episode - 1}.`
+                : `Timed out waiting for the bot to respawn during episode ${environment.episode}.`
+        );
+    }
 });
 
 bot.on("messagestr", (message, messagePosition) => {
@@ -301,9 +417,10 @@ bot.on("messagestr", (message, messagePosition) => {
         const command = message.split(prefix, 2)[1].trim();
 
         if (command === "quit") {
-            environment.on_death(get_state());
-            write_transition(environment.pop_transitions());
-            bot.quit();
+            if (episode_active) {
+                finish_episode(get_state());
+            }
+            finish_evaluation();
         } else if (command === "run") {
             running = true;
             console.log("[INFO]: Turned on")
@@ -332,6 +449,8 @@ bot.on("physicsTick", () => {
     if (teleporting) {
         if (near_arena_center()) {
             teleporting = false;
+            clear_lifecycle_timer();
+            episode_active = true;
             start_episode_timer();
         } else if (++tp_ticks >= TP_TIMEOUT_TICKS) {
             send_tp();
