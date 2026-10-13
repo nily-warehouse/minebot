@@ -1,4 +1,5 @@
 const path = require("path");
+const fs = require("fs");
 const dotenv = require("dotenv");
 const mineflayer = require("mineflayer");
 const { MinecraftEnv } = require("./env");
@@ -25,16 +26,6 @@ const EPISODE_TIMEOUT_MS = EPISODE_TIMEOUT_SECONDS * 1000;
 let teleporting = false;
 let tp_ticks = 0;
 const TP_TIMEOUT_TICKS = 40;
-
-// - Arena setup -
-
-const centerX = Number.parseFloat(process.env.CENTERX);
-const centerY = Number.parseFloat(process.env.CENTERY);
-const centerZ = Number.parseFloat(process.env.CENTERZ);
-const upperBoundX = Number(process.env.upperBoundX);
-const lowerBoundX = Number(process.env.lowerBoundX);
-const upperBoundZ = Number(process.env.upperBoundZ);
-const lowerBoundZ = Number(process.env.lowerBoundZ);
 
 // - initial setup -
 
@@ -71,7 +62,7 @@ for (const arg of args) {
     const parsedSlot = Number(value);
 
     if (!/^\d+$/.test(value) || !Number.isSafeInteger(parsedSlot)) {
-      console.error("Enter a positive natural number!");
+      console.error("Slot must be a non-negative integer!");
       process.exit(1);
     }
 
@@ -111,6 +102,74 @@ for (const arg of args) {
   }
 }
 
+function loadArena(slotNumber) {
+  const arenaConfigPath = path.resolve(__dirname, "configs", "arenas.json");
+  let arenas;
+
+  try {
+    arenas = JSON.parse(fs.readFileSync(arenaConfigPath, "utf8"));
+  } catch (error) {
+    console.error(`[ERROR]: Could not load ${arenaConfigPath}: ${error.message}`);
+    process.exit(1);
+  }
+
+  if (arenas === null || typeof arenas !== "object" || Array.isArray(arenas)) {
+    console.error(`[ERROR]: ${arenaConfigPath} must contain an object keyed by slot.`);
+    process.exit(1);
+  }
+
+  const arena = arenas[String(slotNumber)];
+  if (!arena) {
+    console.error(
+      `[ERROR]: No arena is configured for slot ${slotNumber} in ${arenaConfigPath}`
+    );
+    process.exit(1);
+  }
+
+  const values = [
+    arena.center?.x,
+    arena.center?.y,
+    arena.center?.z,
+    arena.corners?.lower?.x,
+    arena.corners?.lower?.z,
+    arena.corners?.upper?.x,
+    arena.corners?.upper?.z,
+  ];
+  if (!values.every(Number.isFinite)) {
+    console.error(
+      `[ERROR]: Arena slot ${slotNumber} must define numeric center coordinates ` +
+      "and lower/upper corner x/z coordinates."
+    );
+    process.exit(1);
+  }
+
+  if (arena.corners.lower.x >= arena.corners.upper.x ||
+      arena.corners.lower.z >= arena.corners.upper.z) {
+    console.error(`[ERROR]: Arena slot ${slotNumber} has invalid corner bounds.`);
+    process.exit(1);
+  }
+
+  return {
+    centerX: arena.center.x,
+    centerY: arena.center.y,
+    centerZ: arena.center.z,
+    lowerBoundX: arena.corners.lower.x,
+    upperBoundX: arena.corners.upper.x,
+    lowerBoundZ: arena.corners.lower.z,
+    upperBoundZ: arena.corners.upper.z,
+  };
+}
+
+const {
+  centerX,
+  centerY,
+  centerZ,
+  lowerBoundX,
+  upperBoundX,
+  lowerBoundZ,
+  upperBoundZ,
+} = loadArena(slot);
+
 const environment = new MinecraftEnv(policy, epLimit, 2, config);
 const writer = new TransitionWriter(slot);
 
@@ -149,12 +208,6 @@ function end(reason) {
     bot.removeListener("end", end);
 }
 
-function setSlot() {
-    if (slot > 0) {
-        bot.chat('/mv tp slot_' + slot);
-    }
-}
-
 function spawn() {
     current_target_id = null;
     current_target_completed = false;
@@ -175,9 +228,11 @@ function spawn() {
 
 // initial teleport
 
-function near_spawn() {
+function near_arena_center() {
     const p = bot.entity.position;
-    return Math.abs(p.x - 8.5) < 0.5 && Math.abs(p.y + 60) < 0.5 && Math.abs(p.z - 8.5) < 0.5;
+    return Math.abs(p.x - centerX) < 0.5 &&
+        Math.abs(p.y - centerY) < 0.5 &&
+        Math.abs(p.z - centerZ) < 0.5;
 }
 
 function send_tp() {
@@ -206,7 +261,6 @@ function start_episode_timer() {
 }
 
 bot.on("login", login);
-bot.once('spawn', setSlot);
 bot.on('spawn', spawn);
 bot.on("kicked", kicked);
 bot.on("end", end);
@@ -276,7 +330,7 @@ function execute() {
 
 bot.on("physicsTick", () => {
     if (teleporting) {
-        if (near_spawn()) {
+        if (near_arena_center()) {
             teleporting = false;
             start_episode_timer();
         } else if (++tp_ticks >= TP_TIMEOUT_TICKS) {
