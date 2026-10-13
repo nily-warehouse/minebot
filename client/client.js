@@ -221,6 +221,8 @@ bot.on("playerCollect", (collector, collected) => {
     log_target(
         `Target achieved: dropped item ${current_target_id} was collected by the bot.`
     );
+
+    bot.chat(`/tp ${NAME} ${centerX} ${centerY} ${centerZ}`);
 });
 
 // --- Running and Death Managment ---
