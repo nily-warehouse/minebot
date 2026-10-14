@@ -162,13 +162,13 @@ function loadArena(slotNumber) {
   }
 
   return {
-    centerX: arena.center.x,
-    centerY: arena.center.y,
-    centerZ: arena.center.z,
-    lowerBoundX: arena.corners.lower.x,
-    upperBoundX: arena.corners.upper.x,
-    lowerBoundZ: arena.corners.lower.z,
-    upperBoundZ: arena.corners.upper.z,
+    centerX:     Number.parseFloat(arena.center.x),
+    centerY:     Number.parseFloat(arena.center.y),
+    centerZ:     Number.parseFloat(arena.center.z),
+    lowerBoundX: Number.parseFloat(arena.corners.lower.x),
+    upperBoundX: Number.parseFloat(arena.corners.upper.x),
+    lowerBoundZ: Number.parseFloat(arena.corners.lower.z),
+    upperBoundZ: Number.parseFloat(arena.corners.upper.z),
   };
 }
 
@@ -292,7 +292,7 @@ function begin_episode() {
     }
 
     teleporting = true;
-    send_tp();
+    initial_tp();
     arm_lifecycle_timer(
         TELEPORT_TIMEOUT_MS,
         `Timed out waiting to reach the arena center for episode ${environment.episode}.`
@@ -306,16 +306,9 @@ function spawn() {
 
 // initial teleport
 
-function near_arena_center() {
-    const p = bot.entity.position;
-    return Math.abs(p.x - centerX) < 0.5 &&
-        Math.abs(p.y - centerY) < 0.5 &&
-        Math.abs(p.z - centerZ) < 0.5;
-}
-
-function send_tp() {
+function initial_tp() {
     bot.clearControlStates();
-    bot.chat(`/tp ${NAME} ${centerX} ${centerY} ${centerZ}`);
+    tp_back_in_arena();
     tp_ticks = 0;
 }
 
@@ -384,7 +377,7 @@ bot.on("playerCollect", (collector, collected) => {
         `Target achieved: dropped item ${current_target_id} was collected by the bot.`
     );
 
-    bot.chat(`/tp ${NAME} ${centerX} ${centerY} ${centerZ}`);
+    tp_back_in_arena()
 });
 
 // --- Running and Death Managment ---
@@ -447,13 +440,13 @@ function execute() {
 
 bot.on("physicsTick", () => {
     if (teleporting) {
-        if (near_arena_center()) {
+        if (is_in_arena()) {
             teleporting = false;
             clear_lifecycle_timer();
             episode_active = true;
             start_episode_timer();
         } else if (++tp_ticks >= TP_TIMEOUT_TICKS) {
-            send_tp();
+            initial_tp();
         }
         return;
     }
@@ -469,17 +462,27 @@ bot.on("physicsTick", () => {
 
 // --- Arena border magnagement ---
 
-function checkArena() {
+function is_in_arena() {
+    const p = bot.entity.position;
     boundCheck = (
-        bot.entity.position.x < lowerBoundX ||
-        bot.entity.position.x > upperBoundX ||
-        bot.entity.position.z < lowerBoundZ ||
-        bot.entity.position.z > upperBoundZ
+        p.x > lowerBoundX &&
+        p.x < upperBoundX &&
+        p.z > lowerBoundZ &&
+        p.z < upperBoundZ
     )
+    return boundCheck;
+}
 
-    if (boundCheck){
-        bot.chat(`/tp ${NAME} ${centerX} ${centerY} ${centerZ}`);
+function checkArena() {
+    if (!is_in_arena()){
+        tp_back_in_arena();
     }
+}
+
+function tp_back_in_arena() {
+    XPos = (Math.random() * (upperBoundX - lowerBoundX)) + lowerBoundX;
+    ZPos = (Math.random() * (upperBoundZ - lowerBoundZ)) + lowerBoundZ;
+    bot.chat(`/tp ${NAME} ${XPos} ${centerY} ${ZPos}`);
 }
 
 // --- Action ---
